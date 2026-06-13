@@ -118,8 +118,8 @@ export default function (pi: ExtensionAPI) {
         invalidate: () => {},
         render: (width: number) => {
           const plain = `${ICON}  ${ref}`;
-          const pad = Math.max(0, width - plain.length);
-          const colored = theme.fg("accent", ICON) + theme.fg("borderMuted", `  ${ref}`);
+          const pad = Math.max(0, width - plain.length - 1); // one space of right inset
+          const colored = theme.fg("accent", ICON) + theme.fg("text", `  ${ref}`);
           return [" ".repeat(pad) + colored];
         },
       }),
