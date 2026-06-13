@@ -1,0 +1,29 @@
+{
+  "name": "pi-bridge",
+  "displayName": "pi IDE Bridge",
+  "description": "Pushes the active file and selection to a running pi coding-agent session over a local socket.",
+  "version": "0.1.0",
+  "publisher": "soma",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "pi IDE Bridge",
+      "properties": {
+        "piBridge.debounceMs": {
+          "type": "number",
+          "default": 120,
+          "description": "Debounce window (ms) before pushing selection changes to pi."
+        }
+      }
+    }
+  }
+}
