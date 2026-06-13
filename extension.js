@@ -91,27 +91,17 @@ function buildPayload(editor) {
 }
 
 function activate(context) {
-  let conn; // { path, socket }
   let lastSent;
   let timer;
 
-  const dropConn = () => {
-    if (conn) {
-      conn.socket.destroy();
-      conn = undefined;
-    }
-  };
-
-  const getConn = (sockPath) => {
-    if (conn && conn.path === sockPath && !conn.socket.destroyed) return conn.socket;
-    dropConn();
+  // Stateless: connect fresh per push. A persistent connection goes stale when
+  // pi reloads (it unlinks + recreates the socket at the same path), and the
+  // dead socket isn't reliably flagged, so writes silently vanish. Short-lived
+  // connections are immune to pi restarts and cheap at debounced rates.
+  const send = (sockPath, line) => {
     const socket = net.createConnection(sockPath);
-    socket.on("error", dropConn);
-    socket.on("close", () => {
-      if (conn && conn.socket === socket) conn = undefined;
-    });
-    conn = { path: sockPath, socket };
-    return socket;
+    socket.on("error", () => socket.destroy()); // no pi listening / race
+    socket.on("connect", () => socket.end(line + "\n"));
   };
 
   const push = (editor) => {
@@ -127,11 +117,7 @@ function activate(context) {
     if (key === lastSent) return;
     lastSent = key;
 
-    try {
-      getConn(sockPath).write(line + "\n");
-    } catch {
-      dropConn();
-    }
+    send(sockPath, line);
   };
 
   const schedule = (editor) => {
@@ -143,10 +129,7 @@ function activate(context) {
   context.subscriptions.push(
     vscode.window.onDidChangeTextEditorSelection((e) => schedule(e.textEditor)),
     vscode.window.onDidChangeActiveTextEditor((editor) => schedule(editor)),
-    { dispose: () => {
-        clearTimeout(timer);
-        dropConn();
-      } },
+    { dispose: () => clearTimeout(timer) },
   );
 
   // Push current state on activation.
