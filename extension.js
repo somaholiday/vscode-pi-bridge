@@ -93,6 +93,7 @@ function buildPayload(editor) {
 function activate(context) {
   let lastSent;
   let timer;
+  let lastSockPath; // last socket we pushed to, for clear-on-shutdown
 
   // Stateless: connect fresh per push. A persistent connection goes stale when
   // pi reloads (it unlinks + recreates the socket at the same path), and the
@@ -109,6 +110,7 @@ function activate(context) {
     const uri = editor?.document?.uri;
     const sockPath = resolveSocket(uri);
     if (!sockPath) return; // no pi listening
+    lastSockPath = sockPath;
 
     const line = JSON.stringify(payload);
     // Dedupe identical consecutive states (keyed on socket too, so switching
@@ -129,7 +131,14 @@ function activate(context) {
   context.subscriptions.push(
     vscode.window.onDidChangeTextEditorSelection((e) => schedule(e.textEditor)),
     vscode.window.onDidChangeActiveTextEditor((editor) => schedule(editor)),
-    { dispose: () => clearTimeout(timer) },
+    {
+      dispose: () => {
+        clearTimeout(timer);
+        // Best-effort: clear the indicator when VS Code shuts down cleanly.
+        // (A hard kill skips this; the snapshot would linger until next launch.)
+        if (lastSockPath) send(lastSockPath, JSON.stringify({ type: "clear" }));
+      },
+    },
   );
 
   // Push current state on activation.
