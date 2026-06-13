@@ -15,7 +15,7 @@
  *   {"type":"clear"}   // active editor has no selection
  */
 
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, Theme } from "@mariozechner/pi-coding-agent";
 import { createServer } from "node:net";
 import type { Server } from "node:net";
 import { createHash } from "node:crypto";
@@ -57,9 +57,26 @@ export default function (pi: ExtensionAPI) {
   let sockPath: string | undefined;
   let regPath: string | undefined;
 
+  // Right-aligned indicator below the editor, e.g. `IDE  src/foo.ts:10-20`.
   const renderWidget = () => {
     const ref = fileRef(state);
-    ctx?.ui.setWidget("ide-bridge", ref ? [`IDE  ${ref}`] : undefined);
+    if (!ref) {
+      ctx?.ui.setWidget("ide-bridge", undefined);
+      return;
+    }
+    ctx?.ui.setWidget(
+      "ide-bridge",
+      (_tui: any, theme: Theme) => ({
+        invalidate: () => {},
+        render: (width: number) => {
+          const plain = `IDE  ${ref}`;
+          const pad = Math.max(0, width - plain.length);
+          const colored = theme.fg("accent", "IDE") + theme.fg("borderMuted", `  ${ref}`);
+          return [" ".repeat(pad) + colored];
+        },
+      }),
+      { placement: "belowEditor" },
+    );
   };
 
   const cleanup = () => {
