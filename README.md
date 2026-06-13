@@ -11,8 +11,9 @@ extension that consumes it.
 
 ## What you get
 
-- A live indicator in pi that mirrors your current file and selection as you move
-  around the editor — `IDE  src/foo.ts:10-20`.
+- A live indicator below pi's input, right-aligned, that mirrors your current
+  file and selection as you move around the editor — an icon plus
+  `src/foo.ts:10-20`. (Suppressible; see [Settings](#settings).)
 - `@selection` in a prompt expands, at submit time, to the highlighted code:
 
   ````
@@ -41,7 +42,7 @@ onDidChangeTextEditorSelection ─┐         hosts socket at
 onDidChangeActiveTextEditor     │           ~/.pi/ide/<cwd-hash>.sock
   → debounce                    ├─push───►  on message:
   → resolve target socket       │             cache latest state
-  → write JSON line             ┘             update widget (live mirror)
+  → write JSON line             ┘             update widget + write snapshot
 
                                             on prompt (input hook):
                                               expand @selection / @file
@@ -110,9 +111,24 @@ Newline-delimited JSON, editor → pi:
 {"type":"clear"}
 ```
 
-`clear` is sent when the active editor has no selection or focus leaves the
-editor. With an empty selection, a `state` carrying just `file` + `languageId`
-is sent (mirrors the active file without a range).
+`clear` is sent when the active editor has no selection, focus leaves the
+editor, or VS Code shuts down cleanly. With an empty selection, a `state`
+carrying just `file` + `languageId` is sent (mirrors the active file without a
+range).
+
+## Shared snapshot
+
+On each update the consumer mirrors the latest state — **minus the selected
+text** — to a JSON file, so other extensions (e.g. a status bar) can render the
+current file/selection without speaking the socket protocol:
+
+```
+~/.pi/ide/<cwd-hash>.state.json
+{"file":"src/x.ts","startLine":10,"endLine":20,"languageId":"typescript"}
+```
+
+The file is removed when there's no active file (e.g. on `clear`). A consumer
+re-derives the path with `sha256(cwd)` (first 16 hex) and reads it on demand.
 
 ## Socket routing
 
@@ -162,3 +178,6 @@ git -C /path/to/dotfiles commit -m "bump pi-bridge"
   workspace (not the root, not home), neither hash matches and it falls back to
   the newest active pi.
 - One editor selection per pi instance — the most recent push wins.
+- A *hard* kill of VS Code (crash/SIGKILL) skips the clean-shutdown `clear`, so
+  the last snapshot can linger until the next selection change or pi restart.
+  Clean quits clear it.
