@@ -132,6 +132,22 @@ writes the registry on startup and cleans up on shutdown.
 - `piBridge.debounceMs` (default `120`) — debounce window before pushing
   selection changes.
 
+## Development
+
+Both halves are dependency-free and need no build. Edit `extension.js` and run
+**Developer: Reload Window** in VS Code; edit `pi-extension/ide-bridge.ts` and
+`/reload` in pi.
+
+If you vendor this repo as a git submodule (e.g. inside a dotfiles repo that
+symlinks both halves into place), develop in the submodule and push from there.
+To release the pinned version to your other machines, bump the submodule ref in
+the parent repo:
+
+```bash
+git -C /path/to/dotfiles add path/to/vscode-pi-bridge
+git -C /path/to/dotfiles commit -m "bump pi-bridge"
+```
+
 ## Limitations
 
 - Routing keys on pi's working directory. If you run pi in a subdirectory of the
