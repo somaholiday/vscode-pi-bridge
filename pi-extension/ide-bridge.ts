@@ -3,8 +3,9 @@
  *
  * Gives pi Claude-Code-style `/ide` awareness: an editor (e.g. VS Code) pushes
  * the current file + selection over a unix socket; pi keeps a live mirror in a
- * widget above the editor and lets you reference it inline via `@selection` and
- * `@file` tokens that expand at submit time.
+ * widget below the editor and lets you reference it inline via `@selection` and
+ * `@file` tokens that expand at submit time. Set IDE_BRIDGE_WIDGET=0 to suppress
+ * the widget (e.g. when a status bar renders the shared snapshot instead).
  *
  * Topology: pi hosts the socket, keyed on cwd so the right pi instance receives
  * state. A registry file lets the editor side discover the matching socket.
@@ -36,6 +37,13 @@ interface IdeState {
 }
 
 const IDE_DIR = join(homedir(), ".pi", "ide");
+
+// Widget shown by default; set IDE_BRIDGE_WIDGET=0 to suppress (e.g. when a
+// status bar renders the shared snapshot instead).
+const WIDGET_ENABLED = !/^(0|false)$/i.test(process.env.IDE_BRIDGE_WIDGET ?? "");
+
+// nf-fa-code glyph, matching somaline's IDE icon.
+const ICON = "\uF121";
 
 export function cwdHash(cwd: string): string {
   return createHash("sha256").update(cwd).digest("hex").slice(0, 16);
@@ -93,8 +101,12 @@ export default function (pi: ExtensionAPI) {
     }
   };
 
-  // Right-aligned indicator below the editor, e.g. `IDE  src/foo.ts:10-20`.
+  // Right-aligned indicator below the editor, e.g. ` src/foo.ts:10-20`.
   const renderWidget = () => {
+    if (!WIDGET_ENABLED) {
+      ctx?.ui.setWidget("ide-bridge", undefined);
+      return;
+    }
     const ref = fileRef(state);
     if (!ref) {
       ctx?.ui.setWidget("ide-bridge", undefined);
@@ -105,9 +117,9 @@ export default function (pi: ExtensionAPI) {
       (_tui: any, theme: Theme) => ({
         invalidate: () => {},
         render: (width: number) => {
-          const plain = `IDE  ${ref}`;
+          const plain = `${ICON}  ${ref}`;
           const pad = Math.max(0, width - plain.length);
-          const colored = theme.fg("accent", "IDE") + theme.fg("borderMuted", `  ${ref}`);
+          const colored = theme.fg("accent", ICON) + theme.fg("borderMuted", `  ${ref}`);
           return [" ".repeat(pad) + colored];
         },
       }),

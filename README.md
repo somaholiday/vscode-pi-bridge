@@ -129,8 +129,16 @@ writes the registry on startup and cleans up on shutdown.
 
 ## Settings
 
+**VS Code** (`piBridge.*`):
+
 - `piBridge.debounceMs` (default `120`) — debounce window before pushing
   selection changes.
+
+**pi consumer** (environment):
+
+- `IDE_BRIDGE_WIDGET` — set to `0` to suppress the below-editor widget. The
+  shared snapshot is still written, so a status bar can render the indicator
+  instead. Defaults to on.
 
 ## Development
 
