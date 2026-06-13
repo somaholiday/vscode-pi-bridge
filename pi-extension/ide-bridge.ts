@@ -9,6 +9,10 @@
  * Topology: pi hosts the socket, keyed on cwd so the right pi instance receives
  * state. A registry file lets the editor side discover the matching socket.
  *
+ * Shared snapshot: the latest state (minus selected text) is mirrored to
+ * `~/.pi/ide/<cwd-hash>.state.json` so other extensions (e.g. a status bar) can
+ * render the current file/selection without talking to the socket.
+ *
  * Protocol (newline-delimited JSON, editor -> pi):
  *   {"type":"state","file":"src/x.ts","startLine":10,"endLine":20,
  *    "selectedText":"...","languageId":"typescript"}
@@ -33,8 +37,21 @@ interface IdeState {
 
 const IDE_DIR = join(homedir(), ".pi", "ide");
 
-function cwdHash(cwd: string): string {
+export function cwdHash(cwd: string): string {
   return createHash("sha256").update(cwd).digest("hex").slice(0, 16);
+}
+
+export function ideSnapshotPath(cwd: string): string {
+  return join(IDE_DIR, `${cwdHash(cwd)}.state.json`);
+}
+
+export function publicIdeSnapshot(state: IdeState): IdeState {
+  return {
+    file: state.file,
+    startLine: state.startLine,
+    endLine: state.endLine,
+    languageId: state.languageId,
+  };
 }
 
 function lineRange(state: IdeState): string | undefined {
@@ -56,6 +73,25 @@ export default function (pi: ExtensionAPI) {
   let state: IdeState = {};
   let sockPath: string | undefined;
   let regPath: string | undefined;
+  let statePath: string | undefined;
+
+  const writeSharedState = () => {
+    if (!statePath) return;
+    const snapshot = publicIdeSnapshot(state);
+    if (!snapshot.file) {
+      try {
+        unlinkSync(statePath);
+      } catch {
+        // already gone
+      }
+      return;
+    }
+    try {
+      writeFileSync(statePath, JSON.stringify(snapshot));
+    } catch (err: any) {
+      process.stderr.write(`[ide-bridge] state write failed: ${err?.message}\n`);
+    }
+  };
 
   // Right-aligned indicator below the editor, e.g. `IDE  src/foo.ts:10-20`.
   const renderWidget = () => {
@@ -82,7 +118,7 @@ export default function (pi: ExtensionAPI) {
   const cleanup = () => {
     server?.close();
     server = undefined;
-    for (const p of [sockPath, regPath]) {
+    for (const p of [sockPath, regPath, statePath]) {
       if (!p) continue;
       try {
         unlinkSync(p);
@@ -100,6 +136,7 @@ export default function (pi: ExtensionAPI) {
     const hash = cwdHash(eventCtx.cwd);
     sockPath = join(IDE_DIR, `${hash}.sock`);
     regPath = join(IDE_DIR, `${hash}.json`);
+    statePath = ideSnapshotPath(eventCtx.cwd);
 
     try {
       mkdirSync(IDE_DIR, { recursive: true });
@@ -130,6 +167,7 @@ export default function (pi: ExtensionAPI) {
                 languageId: msg.languageId,
               };
             }
+            writeSharedState();
             renderWidget();
           } catch (err: any) {
             process.stderr.write(`[ide-bridge] bad message: ${err?.message}\n`);
